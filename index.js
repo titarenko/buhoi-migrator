@@ -21,6 +21,7 @@ const client = new pg.Client(connection)
 client.connect(e => {
 	if (e) {
 		log.error(`failed to connect due to ${e.stack}`)
+		process.nextTick(() => process.exit(1))
 	}
 })
 
