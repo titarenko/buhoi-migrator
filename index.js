@@ -49,8 +49,11 @@ function getAppliedMigrations () {
 }
 
 function getMigrationFilePaths () {
-	return Promise.resolve(['./', process.env.NODE_ENV ? './staging' : null].filter(Boolean))
-		.mapSeries(d => readdir(d).then(files => files.map(f => path.join(d, f))))
+	const directories = [
+		'./',
+		process.env.NODE_ENV != 'production' ? './staging' : null,
+	].filter(Boolean)
+	return Promise.mapSeries(directories, readMigrationDirectory)
 		.then(groups => groups.length == 1 ? groups[0] : groups[0].concat(groups[1]))
 }
 
@@ -73,4 +76,13 @@ function runSingle (filePath) {
 		.try(() => psql(filePath))
 		.then(() => query('insert into migrations (name) values ($1)', [filePath]))
 		.then(() => log.debug(`applied ${filePath}`))
+}
+
+function readMigrationDirectory (directory) {
+	return readdir(directory)
+		.catch(e => {
+			log.warn(`failed to read ${directory} due to ${e.stack}`)
+			return []
+		})
+		.then(files => files.map(file => path.join(directory, file)))
 }
