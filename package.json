@@ -20,6 +20,6 @@
     "lint": "eslint . --ext .js --ignore-path .gitignore",
     "precommit": "lint-staged",
     "prepush": "npm run lint",
-    "release": "npm run lint && npm version patch && npm publish && git push"
+    "release": "sh release.sh"
   }
 }
