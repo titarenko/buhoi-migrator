@@ -1,6 +1,6 @@
 {
   "name": "buhoi-migrator",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "PostgreSQL migration tool",
   "main": "index.js",
   "repository": "git@github.com:titarenko/buhoi-migrator.git",
