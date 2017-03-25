@@ -1,59 +1,75 @@
-const Promise = require('bluebird')
+const connection = process.env.PG
+if (!connection) {
+	throw new Error('PG environment vairable is missing.')
+}
+
 const fs = require('fs')
 const path = require('path')
 const { execSync } = require('child_process')
-const knex = require('knex')
-const keyBy = require('lodash.keyby')
+const Promise = require('bluebird')
+const pg = require('pg')
 const log = require('totlog')(__filename)
 
+const writeFile = Promise.promisify(fs.writeFile, { context: fs })
 const readdir = Promise.promisify(fs.readdir, { context: fs })
 
-module.exports = migrate
+const [who, where, database] = connection.slice(11).split(/[@\/]/)
+const [host, port = '5432'] = where.split(':')
+const [user] = who.split(':')
 
-function migrate ({ connection, folders }) {
-	const [who, where, database] = connection.slice(11).split(/@\//)
-	const [host, port = '5432'] = where.split(':')
-	const [user] = who.split(':')
+const client = new pg.Client(connection)
+client.connect(e => {
+	if (e) {
+		log.error(`failed to connect due to ${e.stack}`)
+	}
+})
 
-	fs.writeFileSync(`${process.env.HOME}/.pgpass`, `${host}:${port}:${database}:${who}`)
+const query = Promise.promisify(client.query, { context: client })
+const psql = filePath => execSync(`psql -v ON_ERROR_STOP=1 -q -w -h ${host} -U ${user} -d ${database} -f ${filePath}`)
 
-	const pg = knex({ client: 'pg', connection })
-	const psql = file => execSync(`psql -v ON_ERROR_STOP=1 -q -w -h ${host} -U ${user} -d ${database} -f ${file}`)
+Promise.join(
+	getAppliedMigrations(),
+	getMigrationFilePaths(),
+	setPsqlCredentials(),
+	runAll
+).tap(() => {
+	log.debug('done!')
+	process.nextTick(() => process.exit(0))
+}).catch({ code: 'ECONNREFUSED' }, e_ => {
+	log.warn('pg is not ready yet, try later')
+	process.nextTick(() => process.exit(75))
+}).catch(e => {
+	log.error(`fatal ${e.stack}`)
+	process.nextTick(() => process.exit(1))
+})
 
-	const files = Promise.resolve(folders)
-		.mapSeries(d => readdir(d).then(files => files.map(f => path.join(d, f))))
-		.then(groups => groups.length > 1 ? groups[0].concat(...groups.slice(1)) : groups[0] || [])
-
-	Promise.join(
-		pg('migrations'),
-		files,
-		(migrations, files) => runAll({ pg, psql, migrations, files })
-	).tap(() => {
-		log.debug('done!')
-		process.exit(0)
-	}).catch(e => {
-		if (e.message == 'Pool was destroyed' || e.code == 'ECONNREFUSED') {
-			log.warn('pg is not ready yet, try later')
-			process.exit(75)
-		}
-		log.error(`fatal ${e.stack}`)
-		process.exit(1)
-	})
+function getAppliedMigrations () {
+	return query('select name from migrations').then(r => r.rows)
 }
 
-function runAll ({ pg, psql, migrations, files }) {
-	const index = keyBy(migrations, 'name')
-	files = files.filter(file => !index[file] && /\.sql$/.test(file))
-	files.sort()
-	return files.reduce(
-		(previous, file) => previous.then(() => runSingle({ pg, psql, file })),
+function getMigrationFilePaths () {
+	return Promise.resolve(['./', process.env.NODE_ENV ? './staging' : null].filter(Boolean))
+		.mapSeries(d => readdir(d).then(files => files.map(f => path.join(d, f))))
+		.then(groups => groups.length == 1 ? groups[0] : groups[0].concat(groups[1]))
+}
+
+function setPsqlCredentials () {
+	return writeFile(`${process.env.HOME}/.pgpass`, `${host}:${port}:${database}:${who}`)
+}
+
+function runAll (migrations, filePaths) {
+	const index = migrations.reduce((index, value) => Object.assign(index, { [value.name]: true }), { })
+	filePaths = filePaths.filter(it => !index[it] && /\.sql$/.test(it))
+	filePaths.sort()
+	return filePaths.reduce(
+		(previous, file) => previous.then(() => runSingle(file)),
 		Promise.resolve()
 	)
 }
 
-function runSingle ({ pg, psql, file }) {
+function runSingle (filePath) {
 	return Promise
-		.try(() => psql(file))
-		.then(() => pg('migrations').insert({ name: path.filename(file) }).returning('name').then(it => it[0]))
-		.tap(name => log.debug(`applied ${name}`))
+		.try(() => psql(filePath))
+		.then(() => query('insert into migrations (name) values ($1)', [filePath]))
+		.then(() => log.debug(`applied ${filePath}`))
 }

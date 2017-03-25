@@ -8,8 +8,18 @@
   "license": "MIT",
   "dependencies": {
     "bluebird": "^3.5.0",
-    "knex": "^0.12.9",
     "pg": "^6.1.5",
     "totlog": "^1.0.2"
+  },
+  "devDependencies": {
+    "eslint": "^3.18.0",
+    "eslint-plugin-func-call": "^1.0.3",
+    "eslint-plugin-require-path-exists": "^1.1.5"
+  },
+  "scripts": {
+    "lint": "eslint . --ext .js --ignore-path .gitignore",
+    "precommit": "lint-staged",
+    "prepush": "npm run lint",
+    "release": "npm run lint && npm version patch && npm publish && git push"
   }
 }
