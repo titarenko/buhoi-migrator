@@ -58,7 +58,7 @@ function getMigrationFilePaths () {
 }
 
 function setPsqlCredentials () {
-	return writeFile(`${process.env.HOME}/.pgpass`, `${host}:${port}:${database}:${who}`)
+	return writeFile(`${process.env.HOME}/.pgpass`, `${host}:${port}:${database}:${who}`, { mode: 0o600 })
 }
 
 function runAll (migrations, filePaths) {
