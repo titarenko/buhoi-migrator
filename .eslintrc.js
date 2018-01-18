@@ -51,10 +51,8 @@ module.exports = {
 		'require-path-exists/notEmpty': 2,
 		'require-path-exists/tooManyArguments': 2,
 		'require-path-exists/exists': [2, { extensions: ['', '.js', '.jsx'] }],
-		'func-call/opening-newline': ['error', 1],
 	},
 	plugins: [
 		'require-path-exists',
-		'func-call',
 	],
 }
