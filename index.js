@@ -26,7 +26,7 @@ client.connect(e => {
 })
 
 const query = Promise.promisify(client.query, { context: client })
-const psql = filePath => execSync(`psql -v ON_ERROR_STOP=1 -q -w -h ${host} -U ${user} -d ${database} -f ${filePath}`)
+const psql = filePath => execSync(`psql -v ON_ERROR_STOP=1 -q -w -h ${host} -p ${port} -U ${user} -d ${database} -f ${filePath}`)
 
 Promise.join(
 	getAppliedMigrations(),
